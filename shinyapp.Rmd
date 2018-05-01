@@ -1,0 +1,168 @@
+---
+title: "Family Planning Shiny App"
+author: "Marcela Guerra Osorno"
+date: "May 1, 2018"
+output: html_notebook
+runtime: shiny
+---
+
+```{r Library, include=FALSE}
+library(shiny)
+library(rworldmap)
+library(RColorBrewer)
+library(classInt)
+library(shinyjs)
+```
+#INTRODUCTION
+### The United Nations Foundation links the UN's work with others around the world, mobilizing the energy and expertise of business and non-governmental organizations to help the UN tacke issues including climate change, global health, peace and security, women's empowerment, poverty eradication, energy access, and U.S.-UN relations.
+### On the other hand, Family Planning 2020 (FP2020) is a global partnership that supports the rights of women and girls to decide, freely, and for themselves, whether, when, and how many children they want to have.
+
+#ABOUT THE SHINY APP
+### The following code runs a Shiny App designed to visualize data on family planning, by using heat maps, index plots, summary statistics, and a simple linear regression model.
+### The dataset contains information on 69 observations (based on the 69 focus countries where FP2020 currently works), and three variables: 'unmet need for modern contraception', 'adolescent birth rate','fertility rate' 
+```{r Panels}
+ui <- fluidPage(
+  tags$head(
+    tags$style(HTML("
+                    @import url('//fonts.googleapis.com/css?family=Lobster|Cabin:400,700');
+                    "))
+    ),
+  titlePanel(h1("Global Data on Family Planning", 
+                style = "font-family:'Lobster',cursive;
+                font-weight: 500; line-height: 1.1; 
+                color: #4d3a7d;")),
+  
+  # Side panel
+  sidebarLayout(
+    sidebarPanel(
+      actionButton("do", "About FP2020"),
+      verbatimTextOutput("text"),
+      tags$head(tags$style("#text{font-size: 14px
+                           
+                           }"
+                         )
+      ),
+      radioButtons("plot", "Choose your plot",
+                   c("Scatterplot Unmet need", "Map Unmet need", "Map Adolescent Birth Rate", 
+                     "Map Fertility Rate", "Fertility Rate ~ Unmet need")),
+      "Created by Marcela Guerra Osorno"
+      ),
+    
+    # Main panel
+    mainPanel(
+      tabsetPanel(
+        tabPanel("Plots", (plotOutput("plotdot"))),
+        tabPanel("Summary", "Summary statistics for the percentage of women with an unmet need for 
+                 modern contraception:", (verbatimTextOutput("statsUnmet")), 
+                 "Summary statistics for the number of births to adolescent females, aged 15-19 per 1,000:", 
+                 (verbatimTextOutput("statsABR")),
+                 "Summary statistics for the fertility rate per woman:", 
+                 (verbatimTextOutput("statsFR")),
+                 "Summary statistics for a Simple Linear Regression Model: Fertility Rate ~ Unmet need",
+                 (verbatimTextOutput("statsFP"))),
+        tabPanel("List of Countries", ("In the following link you can consult the complete list of the 69 
+                                       focus countries where FP2020 is currently working"), (uiOutput("link")) )
+      )
+    )
+  ))
+```
+
+```{r inputs and outputs}
+server <- function(input, output) {
+  
+  observeEvent(input$do, {
+    output$text <- renderText({"Family Planning 2020 (FP2020) uses a suite of quantitative metrics to monitor 
+      progress annually across the 69 focus countries. The following dataset corresponds to the the percentage 
+      of fecund women of reproductive age who want no more children or to postpone having the next child, but 
+      are not using a contraceptive method, plus women who are currently using a traditional method of family 
+      planning. Women using a traditional method are assumed to have an unmet need for modern contraception."
+    })
+  })
+  url <- a("List of 69 focus countries", 
+           href="http://progress.familyplanning2020.org/en/appendices/fp2020-focus-countries")
+  output$link <- renderUI({
+    tagList("URL:", url)
+  })
+  # Import data
+  FP2020<-read.csv("./Data/FP2020.csv", header = TRUE)
+  attach(FP2020)
+  
+  output$plotdot <- renderPlot({
+    
+    if (input$plot == "Scatterplot Unmet need") {
+      title <- "Percentage of women with an unmet need for modern contraception" 
+      plot(Unmet, main = title, col='orchid')
+      text(Unmet, labels = Country, cex = .7, pos = 2, col = 'navy')
+    }
+    else if (input$plot == "Map Unmet need") {
+      n <- joinCountryData2Map(FP2020, joinCode="NAME", nameJoinColumn="Country")
+      classInt <- classInt::classIntervals( n[["Unmet"]], n=4, style="jenks")
+      catMethod = classInt[["brks"]]
+      colourPalette <- RColorBrewer::brewer.pal(4,'RdPu')
+      mapParams<- mapCountryData(n, nameColumnToPlot="Unmet", addLegend=FALSE, mapTitle="Percentage of women with an unmet need for modern contraception",
+                                 catMethod=catMethod, 
+                                 colourPalette=colourPalette )
+      do.call( addMapLegend, c( mapParams, legendLabels="all", legendWidth=0.5, legendIntervals="data", 
+                                legendMar = 2 ) )  
+    }
+    
+    else if (input$plot == "Map Adolescent Birth Rate") {
+      n <- joinCountryData2Map(FP2020, joinCode="NAME", nameJoinColumn="Country")
+      classInt <- classInt::classIntervals( n[["ABR"]], n=4, style="jenks")
+      catMethod = classInt[["brks"]]
+      colourPalette <- RColorBrewer::brewer.pal(4,'Purples')
+      mapParams<- mapCountryData(n, nameColumnToPlot="ABR", addLegend=FALSE, mapTitle="Number of births to adolescent females, aged 15-19 per 1,000 adolescent females",
+                                 catMethod=catMethod, 
+                                 colourPalette=colourPalette )
+      do.call( addMapLegend, c( mapParams, legendLabels="all", legendWidth=0.5, legendIntervals="data", 
+                                legendMar = 2 ))
+      
+    }
+    
+    else if (input$plot == "Map Fertility Rate") {
+      n <- joinCountryData2Map(FP2020, joinCode="NAME", nameJoinColumn="Country")
+      classInt <- classInt::classIntervals( n[["FR"]], n=4, style="jenks")
+      catMethod = classInt[["brks"]]
+      colourPalette <- RColorBrewer::brewer.pal(4,'BuGn')
+      mapParams<- mapCountryData(n, nameColumnToPlot="FR", addLegend=FALSE, mapTitle="Fertility Rate: Number of children per woman",
+                                 catMethod=catMethod, 
+                                 colourPalette=colourPalette )
+      do.call( addMapLegend, c( mapParams, legendLabels="all", legendWidth=0.5, legendIntervals="data", 
+                                legendMar = 2 ) )  
+    }
+    
+    else if (input$plot == "Fertility Rate ~ Unmet need") {
+      title <- "Fertility Rate vs. Unmet need" 
+      plot(FR~Unmet, main = title, col='orchid')
+      text(y= "Fertility Rate", x="Unmet", labels = Country, cex = .7, pos = 2, col = 'navy')
+    }
+    
+  })
+  
+  output$statsUnmet <- renderPrint({
+    summary(FP2020$Unmet)
+  })
+  
+  output$statsABR <- renderPrint({
+    summary(FP2020$ABR)
+  })
+  
+  output$statsFR <- renderPrint({
+    summary(FP2020$FR)
+  })
+  
+  output$statsFP <- renderPrint({
+    FPreg<-lm(FP2020$FR~FP2020$Unmet)
+    summary(FPreg)
+  })
+  
+}
+```
+
+### The heat map allows us to visualize which countries have a higher unmet need percentage, higher adolescent birth rate,  and higher fertility rate
+
+### Frome the simple regression model 'Fertility Rate' ~ 'Unmet Need', we can see that the 'Unmet Need' is significant for explaining 'Fertility Rate'. It makes sense because at a higher level of unmet need for contraception, we would expect a higher fertility rate.
+
+```{r run application}
+shinyApp(ui = ui, server = server)
+```
